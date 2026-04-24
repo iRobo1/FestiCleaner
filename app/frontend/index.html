@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Festival Robot Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #0066cc;
+            padding-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #0066cc, #00ccff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: #2a2a2a;
+            border: 2px solid #0066cc;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 102, 204, 0.2);
+        }
+
+        .panel h2 {
+            margin-bottom: 15px;
+            color: #00ccff;
+            font-size: 1.3em;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #444;
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #aaa;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            color: #0f0;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        #camera-frame {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin-top: 10px;
+            background: #000;
+        }
+
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            gap: 2px;
+            margin-top: 15px;
+            padding: 10px;
+            background: #1a1a1a;
+            border-radius: 8px;
+        }
+
+        .map-cell {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #333;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .map-cell.cleaned {
+            background: #0f0;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+        }
+
+        .map-cell.robot {
+            background: #ff6600;
+            box-shadow: 0 0 8px rgba(255, 102, 0, 1);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 25px;
+            background: #333;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0066cc, #00ccff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: bold;
+            font-size: 0.9em;
+            transition: width 0.3s;
+        }
+
+        .status-light {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-light.active {
+            background: #0f0;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.8);
+        }
+
+        .status-light.inactive {
+            background: #f00;
+            box-shadow: 0 0 5px rgba(255, 0, 0, 0.8);
+        }
+
+        .battery-bar {
+            width: 100%;
+            height: 20px;
+            background: #333;
+            border-radius: 3px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+
+        .battery-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0f0, #ff0, #f00);
+            width: 100%;
+            transition: width 0.3s;
+        }
+
+        button {
+            background: #0066cc;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-top: 15px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #0052a3;
+            box-shadow: 0 0 10px rgba(0, 102, 204, 0.5);
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .stat-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .small-stat {
+            padding: 15px;
+            background: #1a1a1a;
+            border-radius: 5px;
+            border-left: 3px solid #0066cc;
+        }
+
+        .small-stat .value {
+            font-size: 1.8em;
+            color: #0f0;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .small-stat .label {
+            color: #888;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Festival Robot Monitor</h1>
+            <p>Real-time tracking and camera feed</p>
+        </header>
+
+        <div class="grid">
+            <!-- Robot Status -->
+            <div class="panel">
+                <h2>Robot Status</h2>
+                <div class="stat-row">
+                    <span class="stat-label">Status</span>
+                    <span class="stat-value">
+                        <span class="status-light active" id="status-light"></span>
+                        <span id="status-text">Active</span>
+                    </span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Battery</span>
+                    <span class="stat-value" id="battery-value">--</span>
+                </div>
+                <div class="battery-bar">
+                    <div class="battery-fill" id="battery-fill" style="width: 85%;"></div>
+                </div>
+                <div class="stat-row" style="margin-top: 10px;">
+                    <span class="stat-label">Temperature</span>
+                    <span class="stat-value" id="temp-value">--</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Position X</span>
+                    <span class="stat-value" id="pos-x">--</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Position Y</span>
+                    <span class="stat-value" id="pos-y">--</span>
+                </div>
+            </div>
+
+            <!-- Camera Feed -->
+            <div class="panel">
+                <h2>Camera Feed</h2>
+                <img id="camera-frame" src="" alt="Camera Feed" />
+                <p style="font-size: 0.9em; color: #888; margin-top: 10px;">WebSocket Real-Time Stream</p>
+            </div>
+
+            <!-- Map View -->
+            <div class="panel full-width">
+                <h2>Cleaned Area Map</h2>
+                <div style="display: grid; grid-template-columns: 1fr auto; gap: 20px;">
+                    <div>
+                        <div class="map-grid" id="map-grid"></div>
+                    </div>
+                    <div style="min-width: 200px;">
+                        <div class="small-stat">
+                            <div class="value" id="coverage-percent">--</div>
+                            <div class="label">Coverage</div>
+                        </div>
+                        <div class="small-stat">
+                            <div class="value" id="cleaned-cells">--</div>
+                            <div class="label">Cleaned Cells</div>
+                        </div>
+                        <div class="small-stat">
+                            <div class="value" id="total-area">--</div>
+                            <div class="label">Area (m²)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="panel">
+                <h2>Statistics</h2>
+                <div class="stat-row">
+                    <span class="stat-label">Total Readings</span>
+                    <span class="stat-value" id="total-readings">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Snapshots</span>
+                    <span class="stat-value" id="total-snapshots">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Session Time</span>
+                    <span class="stat-value" id="session-time">00:00:00</span>
+                </div>
+                <button onclick="fetchStats()">Refresh Stats</button>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="panel">
+                <h2>Controls</h2>
+                <button onclick="captureSnapshot()">📸 Capture Snapshot</button>
+                <button onclick="refreshMap()">🗺️ Refresh Map</button>
+                <button onclick="clearData()" style="background: #cc0000;">🗑️ Clear Data</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://localhost:8000";
+        let startTime = Date.now();
+        let wsCamera = null;
+        let wsTelemetry = null;
+
+        function connectWebSockets() {
+            // Camera WebSocket
+            wsCamera = new WebSocket("ws://localhost:8000/ws/camera");
+            wsCamera.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "frame") {
+                        document.getElementById("camera-frame").src = "data:image/jpeg;base64," + data.data;
+                    }
+                } catch (e) {
+                    console.error("Camera WebSocket error:", e);
+                }
+            };
+
+            // Telemetry WebSocket
+            wsTelemetry = new WebSocket("ws://localhost:8000/ws/telemetry");
+            wsTelemetry.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === "telemetry") {
+                        updateStatus(msg.data);
+                    }
+                } catch (e) {
+                    console.error("Telemetry WebSocket error:", e);
+                }
+            };
+        }
+
+        function updateStatus(data) {
+            document.getElementById("battery-value").textContent = data.battery.toFixed(1) + "%";
+            document.getElementById("battery-fill").style.width = data.battery + "%";
+            document.getElementById("temp-value").textContent = data.temperature.toFixed(1) + "°C";
+            document.getElementById("pos-x").textContent = data.position.x.toFixed(2) + "m";
+            document.getElementById("pos-y").textContent = data.position.y.toFixed(2) + "m";
+
+            const statusLight = document.getElementById("status-light");
+            const statusText = document.getElementById("status-text");
+            if (data.is_active) {
+                statusLight.className = "status-light active";
+                statusText.textContent = "Active";
+            } else {
+                statusLight.className = "status-light inactive";
+                statusText.textContent = "Inactive";
+            }
+        }
+
+        async function fetchMap() {
+            try {
+                const response = await fetch(`${API_URL}/api/map`);
+                const data = await response.json();
+
+                document.getElementById("coverage-percent").textContent = data.coverage_percent.toFixed(1) + "%";
+                document.getElementById("cleaned-cells").textContent = data.cleaned_cells;
+                document.getElementById("total-area").textContent = data.total_area_m2.toFixed(1);
+
+                const mapGrid = document.getElementById("map-grid");
+                mapGrid.innerHTML = "";
+                const grid = data.grid;
+                for (let i = 0; i < grid.length; i++) {
+                    for (let j = 0; j < grid[i].length; j++) {
+                        const cell = document.createElement("div");
+                        cell.className = "map-cell" + (grid[i][j] ? " cleaned" : "");
+                        mapGrid.appendChild(cell);
+                    }
+                }
+            } catch (e) {
+                console.error("Error fetching map:", e);
+            }
+        }
+
+        async function fetchStats() {
+            try {
+                const response = await fetch(`${API_URL}/api/stats`);
+                const data = await response.json();
+                document.getElementById("total-readings").textContent = data.total_telemetry_readings;
+                document.getElementById("total-snapshots").textContent = data.total_camera_snapshots;
+            } catch (e) {
+                console.error("Error fetching stats:", e);
+            }
+        }
+
+        async function captureSnapshot() {
+            try {
+                const response = await fetch(`${API_URL}/api/camera/snapshot`, { method: "GET" });
+                const data = await response.json();
+                alert("Snapshot captured: ID " + data.id);
+            } catch (e) {
+                console.error("Error capturing snapshot:", e);
+            }
+        }
+
+        async function refreshMap() {
+            await fetchMap();
+            await fetchStats();
+        }
+
+        function clearData() {
+            if (confirm("Clear all data?")) {
+                location.reload();
+            }
+        }
+
+        function updateSessionTime() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const hours = Math.floor(elapsed / 3600);
+            const minutes = Math.floor((elapsed % 3600) / 60);
+            const seconds = elapsed % 60;
+            document.getElementById("session-time").textContent =
+                String(hours).padStart(2, '0') + ':' +
+                String(minutes).padStart(2, '0') + ':' +
+                String(seconds).padStart(2, '0');
+        }
+
+        // Initialize
+        window.addEventListener("load", () => {
+            connectWebSockets();
+            fetchMap();
+            fetchStats();
+            setInterval(updateSessionTime, 1000);
+        });
+    </script>
+</body>
+</html>
