@@ -1,0 +1,12 @@
+# Festiclean trash-detector dataset config.
+# Layout under ./data/ — see colab_train.py for the expected structure.
+
+path: ./data
+train: images/train
+val: images/val
+
+names:
+  0: water_bottle
+  1: can
+  2: chair_leg
+  3: wall
