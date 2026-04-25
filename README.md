@@ -27,4 +27,5 @@ The Arduino Uno Q's camera cannot be connected while the Arduino is connected to
 - Hears metal can fall -> says out loud 'Please don't throw cans on the floor! Now I need to go clean it up'
 - Sorts trash by moving different types of trash to different collection points (metal cans, bottles, tissues)
 - Detect and avoid humans (only legs? might not be able to find a readily available model for this purpose)
+- Battery level monitoring (detect battery level in image, display in dashboard)
 - 
