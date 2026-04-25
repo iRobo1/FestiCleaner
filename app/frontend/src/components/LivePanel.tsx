@@ -2,6 +2,14 @@ import { useEffect } from 'react'
 import { type Telemetry } from '../api'
 import { AsciiTelemetry } from './AsciiTelemetry'
 
+// Hostname / IP of the Arduino UNO Q. When defined, embed the on-board
+// video stream (served by the video_object_detection brick at port 4912)
+// and skip probing the FastAPI camera endpoint.
+//
+// Set in app/frontend/.env.local — see .env.example.
+const BOARD_HOST = import.meta.env.VITE_BOARD_HOST
+const BOARD_STREAM = BOARD_HOST ? `http://${BOARD_HOST}:4912/embed` : null
+
 type Props = {
   telemetry: Telemetry | null
   cameraAvailable: boolean | null
@@ -9,8 +17,16 @@ type Props = {
 }
 
 export function LivePanel({ telemetry, cameraAvailable, onCameraStatus }: Props) {
-  // One-shot probe of the camera endpoint at mount.
   useEffect(() => {
+    if (BOARD_STREAM) {
+      // Trust the board: report camera as available so the layout becomes
+      // livestream-dominant. We can't easily detect iframe load failures
+      // cross-origin, so this is intentionally optimistic.
+      onCameraStatus(true)
+      return
+    }
+
+    // No board configured — fall back to the local FastAPI camera probe.
     let cancelled = false
     fetch('/api/camera/frame')
       .then((r) => {
@@ -31,7 +47,17 @@ export function LivePanel({ telemetry, cameraAvailable, onCameraStatus }: Props)
       <span className="panel__index">02 / 02</span>
 
       <div className="live-stage">
-        {cameraAvailable ? (
+        {BOARD_STREAM ? (
+          <div className="live-frame">
+            <iframe
+              className="live-iframe"
+              src={BOARD_STREAM}
+              title="Robot on-board camera feed"
+              allow="autoplay"
+            />
+            <Hud telemetry={telemetry} />
+          </div>
+        ) : cameraAvailable ? (
           <div className="live-frame">
             <img
               src="/api/camera/stream"

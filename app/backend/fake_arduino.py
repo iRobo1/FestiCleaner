@@ -4,10 +4,11 @@ Fake Arduino Simulator - Generates realistic robot telemetry for testing
 Sends data to the backend API without needing real hardware
 """
 
-import requests
 import json
 import time
 import random
+import urllib.request
+import urllib.error
 from datetime import datetime
 import argparse
 
@@ -19,10 +20,16 @@ class FakeArduino:
         self.update_interval = update_interval
         self.battery = 95.0  # Start at 95%
         self.temperature = 22.0  # Celsius
-        self.position_x = 0.0
-        self.position_y = 0.0
+        self.position_x = 0.4
+        self.position_y = 0.4
         self.time_elapsed = 0
         self.is_running = False
+        # Boustrophedon sweep state for "normal" mode.
+        self.sweep_dir_x = 1
+        self.sweep_step_x = 0.75   # m per tick (≈ 1.5× the cleaning radius)
+        self.sweep_row_step = 1.0  # m between rows
+        self.sweep_min = 0.4
+        self.sweep_max = 9.6
 
     def get_telemetry(self, mode="normal"):
         """Generate realistic sensor data based on mode"""
@@ -36,33 +43,45 @@ class FakeArduino:
         self.temperature += temp_drift
         self.temperature = max(15, min(35, self.temperature))
 
-        # Simulate robot movement (demo-optimized: visible coverage in 3 minutes)
-        # Faster movement so demo shows meaningful map coverage
-        movement_x = random.uniform(-0.6, 0.6)
-        movement_y = random.uniform(-0.6, 0.6)
-        self.position_x += movement_x
-        self.position_y += movement_y
+        # Movement — depends on mode.
+        if mode == "stationary":
+            self.position_x = 5.0
+            self.position_y = 5.0
+        elif mode == "circular":
+            angle = (self.time_elapsed / 100) * 2 * 3.14159
+            self.position_x = 5.0 + 3 * __import__('math').cos(angle)
+            self.position_y = 5.0 + 3 * __import__('math').sin(angle)
+        else:
+            # Boustrophedon sweep: lawnmower pattern across the whole floor.
+            # Covers the 10×10 m area in ~130 ticks (~2 min @ 1 Hz) so the
+            # tile reveal builds visibly throughout the demo.
+            self.position_x += self.sweep_dir_x * self.sweep_step_x
+            if self.position_x >= self.sweep_max:
+                self.position_x = self.sweep_max
+                self.sweep_dir_x = -1
+                self.position_y += self.sweep_row_step
+            elif self.position_x <= self.sweep_min:
+                self.position_x = self.sweep_min
+                self.sweep_dir_x = 1
+                self.position_y += self.sweep_row_step
+            if self.position_y >= self.sweep_max:
+                # Reached the far end — loop back to the start.
+                self.position_x = self.sweep_min
+                self.position_y = self.sweep_min
+                self.sweep_dir_x = 1
+            # A little organic jitter so the path doesn't look perfectly mechanical.
+            self.position_x += random.uniform(-0.08, 0.08)
+            self.position_y += random.uniform(-0.08, 0.08)
+            self.position_x = max(0, min(10, self.position_x))
+            self.position_y = max(0, min(10, self.position_y))
 
-        # Keep within bounds (10m x 10m festival area)
-        self.position_x = max(0, min(10, self.position_x))
-        self.position_y = max(0, min(10, self.position_y))
-
-        # Apply mode-specific adjustments
+        # Mode-specific battery/temperature adjustments.
         if mode == "low_battery":
-            self.battery = max(0, self.battery - 1.0)  # Drain faster
+            self.battery = max(0, self.battery - 1.0)
         elif mode == "hot":
             self.temperature = min(45, self.temperature + 0.5)
         elif mode == "cold":
             self.temperature = max(10, self.temperature - 0.5)
-        elif mode == "stationary":
-            # Stay in one spot
-            self.position_x = 5.0
-            self.position_y = 5.0
-        elif mode == "circular":
-            # Move in a circle
-            angle = (self.time_elapsed / 100) * 2 * 3.14159
-            self.position_x = 5.0 + 3 * __import__('math').cos(angle)
-            self.position_y = 5.0 + 3 * __import__('math').sin(angle)
 
         return {
             "battery": round(self.battery, 2),
@@ -74,22 +93,24 @@ class FakeArduino:
         }
 
     def send_telemetry(self, telemetry):
-        """Send telemetry data to the backend API"""
+        """Send telemetry data to the backend API (stdlib only — no requests dep)."""
+        endpoint = f"{self.api_url}/api/robot/telemetry"
+        body = json.dumps(telemetry).encode("utf-8")
+        req = urllib.request.Request(
+            endpoint,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
         try:
-            endpoint = f"{self.api_url}/api/robot/telemetry"
-            response = requests.post(
-                endpoint,
-                json=telemetry,
-                headers={"Content-Type": "application/json"},
-                timeout=5
-            )
-
-            if response.status_code == 200:
-                return True, "OK"
-            else:
-                return False, f"HTTP {response.status_code}: {response.text}"
-        except requests.exceptions.ConnectionError:
-            return False, "Connection refused (is backend running?)"
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if 200 <= resp.status < 300:
+                    return True, "OK"
+                return False, f"HTTP {resp.status}"
+        except urllib.error.HTTPError as e:
+            return False, f"HTTP {e.code}: {e.reason}"
+        except urllib.error.URLError as e:
+            return False, f"Connection refused (is backend running?): {e.reason}"
         except Exception as e:
             return False, str(e)
 
