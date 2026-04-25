@@ -18,3 +18,13 @@ Connect to a new network: <br>
 Arduino Uno Q's password: 123456789
 
 The Arduino Uno Q's camera cannot be connected while the Arduino is connected to the laptop (only one USB connection can be used at a time).
+
+# Core Features
+- Detects trash (metal cans, water bottles, and tissues) and moves it to a trash collection point
+- Avoids obstacles (everything that isn't 'trash' is classified as an obstacle)
+
+# Gimmicks
+- Hears metal can fall -> says out loud 'Please don't throw cans on the floor! Now I need to go clean it up'
+- Sorts trash by moving different types of trash to different collection points (metal cans, bottles, tissues)
+- Detect and avoid humans (only legs? might not be able to find a readily available model for this purpose)
+- 
