@@ -29,3 +29,9 @@ The Arduino Uno Q's camera cannot be connected while the Arduino is connected to
 - Detect and avoid humans (only legs? might not be able to find a readily available model for this purpose)
 - Battery level monitoring (detect battery level in image, display in dashboard)
 - 
+
+# How to make the demo work
+- Connect camera first, then battery
+- Make sure phone hotspot is running and that the device shows up as connected (otherwise remove other saved networks)
+- Make sure that the Arduino Uno Q has the correct code set as the 'default' to run when powered
+- 
