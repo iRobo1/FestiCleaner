@@ -7,10 +7,11 @@ class Settings:
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./robot_data.db")
 
-    # Camera
+    # Camera (optimized for hackathon demo - Full HD)
     CAMERA_ID: int = int(os.getenv("CAMERA_ID", "0"))
-    CAMERA_WIDTH: int = int(os.getenv("CAMERA_WIDTH", "640"))
-    CAMERA_HEIGHT: int = int(os.getenv("CAMERA_HEIGHT", "480"))
+    CAMERA_WIDTH: int = int(os.getenv("CAMERA_WIDTH", "1920"))
+    CAMERA_HEIGHT: int = int(os.getenv("CAMERA_HEIGHT", "1080"))
+    CAMERA_JPEG_QUALITY: int = int(os.getenv("CAMERA_JPEG_QUALITY", "85"))
 
     # Robot
     GRID_SIZE: int = int(os.getenv("GRID_SIZE", "20"))

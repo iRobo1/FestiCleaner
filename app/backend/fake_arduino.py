@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""
+Fake Arduino Simulator - Generates realistic robot telemetry for testing
+Sends data to the backend API without needing real hardware
+"""
+
+import requests
+import json
+import time
+import random
+from datetime import datetime
+import argparse
+
+class FakeArduino:
+    """Simulates an Arduino UNO Q with realistic sensor data"""
+
+    def __init__(self, api_url="http://localhost:8000", update_interval=1.0):
+        self.api_url = api_url
+        self.update_interval = update_interval
+        self.battery = 95.0  # Start at 95%
+        self.temperature = 22.0  # Celsius
+        self.position_x = 0.0
+        self.position_y = 0.0
+        self.time_elapsed = 0
+        self.is_running = False
+
+    def get_telemetry(self, mode="normal"):
+        """Generate realistic sensor data based on mode"""
+
+        # Simulate battery drain (0.25% per reading for visible demo progress)
+        self.battery -= random.uniform(0.2, 0.3)
+        self.battery = max(0, min(100, self.battery))
+
+        # Simulate temperature variation (+/- 0.5°C drift)
+        temp_drift = random.uniform(-0.5, 0.5)
+        self.temperature += temp_drift
+        self.temperature = max(15, min(35, self.temperature))
+
+        # Simulate robot movement (demo-optimized: visible coverage in 3 minutes)
+        # Faster movement so demo shows meaningful map coverage
+        movement_x = random.uniform(-0.6, 0.6)
+        movement_y = random.uniform(-0.6, 0.6)
+        self.position_x += movement_x
+        self.position_y += movement_y
+
+        # Keep within bounds (10m x 10m festival area)
+        self.position_x = max(0, min(10, self.position_x))
+        self.position_y = max(0, min(10, self.position_y))
+
+        # Apply mode-specific adjustments
+        if mode == "low_battery":
+            self.battery = max(0, self.battery - 1.0)  # Drain faster
+        elif mode == "hot":
+            self.temperature = min(45, self.temperature + 0.5)
+        elif mode == "cold":
+            self.temperature = max(10, self.temperature - 0.5)
+        elif mode == "stationary":
+            # Stay in one spot
+            self.position_x = 5.0
+            self.position_y = 5.0
+        elif mode == "circular":
+            # Move in a circle
+            angle = (self.time_elapsed / 100) * 2 * 3.14159
+            self.position_x = 5.0 + 3 * __import__('math').cos(angle)
+            self.position_y = 5.0 + 3 * __import__('math').sin(angle)
+
+        return {
+            "battery": round(self.battery, 2),
+            "temperature": round(self.temperature, 2),
+            "position": {
+                "x": round(self.position_x, 2),
+                "y": round(self.position_y, 2)
+            }
+        }
+
+    def send_telemetry(self, telemetry):
+        """Send telemetry data to the backend API"""
+        try:
+            endpoint = f"{self.api_url}/api/robot/telemetry"
+            response = requests.post(
+                endpoint,
+                json=telemetry,
+                headers={"Content-Type": "application/json"},
+                timeout=5
+            )
+
+            if response.status_code == 200:
+                return True, "OK"
+            else:
+                return False, f"HTTP {response.status_code}: {response.text}"
+        except requests.exceptions.ConnectionError:
+            return False, "Connection refused (is backend running?)"
+        except Exception as e:
+            return False, str(e)
+
+    def run(self, mode="normal", duration=None, verbose=True):
+        """
+        Run the simulator
+
+        Args:
+            mode: "normal", "low_battery", "hot", "cold", "stationary", "circular"
+            duration: Seconds to run (None = infinite)
+            verbose: Print updates to console
+        """
+        self.is_running = True
+        start_time = time.time()
+
+        if verbose:
+            print(f"🤖 Starting Fake Arduino Simulator")
+            print(f"   API: {self.api_url}")
+            print(f"   Mode: {mode}")
+            print(f"   Interval: {self.update_interval}s")
+            print(f"   Duration: {'∞' if duration is None else f'{duration}s'}")
+            print("=" * 60)
+
+        iteration = 0
+
+        try:
+            while self.is_running:
+                iteration += 1
+                self.time_elapsed += self.update_interval
+
+                # Check duration
+                if duration and (time.time() - start_time) > duration:
+                    break
+
+                # Generate and send telemetry
+                telemetry = self.get_telemetry(mode)
+                success, message = self.send_telemetry(telemetry)
+
+                # Display status
+                status_icon = "✓" if success else "✗"
+                timestamp = datetime.now().strftime("%H:%M:%S")
+
+                if verbose:
+                    print(
+                        f"{status_icon} [{timestamp}] "
+                        f"Battery: {telemetry['battery']:6.2f}% | "
+                        f"Temp: {telemetry['temperature']:6.2f}°C | "
+                        f"Pos: ({telemetry['position']['x']:6.2f}, {telemetry['position']['y']:6.2f}) | "
+                        f"{message}"
+                    )
+
+                # Wait for next update
+                time.sleep(self.update_interval)
+
+        except KeyboardInterrupt:
+            if verbose:
+                print("\n⏸  Simulator stopped by user")
+        finally:
+            self.is_running = False
+            if verbose:
+                print(f"📊 Summary: {iteration} readings sent in {time.time() - start_time:.1f}s")
+
+    def stop(self):
+        """Stop the simulator"""
+        self.is_running = False
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Fake Arduino Simulator for testing the Robot Backend"
+    )
+    parser.add_argument(
+        "--url",
+        default="http://localhost:8000",
+        help="API base URL (default: http://localhost:8000)"
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=1.0,
+        help="Update interval in seconds (default: 1.0)"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["normal", "low_battery", "hot", "cold", "stationary", "circular"],
+        default="normal",
+        help="Simulation mode (default: normal)"
+    )
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=None,
+        help="Duration in seconds (default: infinite)"
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress console output"
+    )
+
+    args = parser.parse_args()
+
+    # Create and run simulator
+    arduino = FakeArduino(
+        api_url=args.url,
+        update_interval=args.interval
+    )
+
+    print(f"\n🚀 Fake Arduino Simulator Starting...\n")
+
+    arduino.run(
+        mode=args.mode,
+        duration=args.duration,
+        verbose=not args.quiet
+    )

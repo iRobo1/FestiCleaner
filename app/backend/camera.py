@@ -3,16 +3,17 @@ import base64
 import threading
 from typing import Optional, Callable
 from datetime import datetime
-import io
 
 class CameraStream:
     """Real-time camera streaming from robot"""
 
-    def __init__(self, camera_id: int = 0, width: int = 640, height: int = 480):
+    def __init__(self, camera_id: int = 0, width: int = 1280, height: int = 720, jpeg_quality: int = 70):
         self.camera_id = camera_id
         self.width = width
         self.height = height
+        self.jpeg_quality = jpeg_quality
         self.cap = None
+		
         self.is_streaming = False
         self.current_frame = None
         self.stream_thread = None
@@ -42,7 +43,7 @@ class CameraStream:
         if not self.cap or not self.current_frame is not None:
             return None
 
-        _, buffer = cv2.imencode('.jpg', self.current_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        _, buffer = cv2.imencode('.jpg', self.current_frame, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
         return base64.b64encode(buffer).decode('utf-8')
 
     def start_streaming(self):
@@ -77,5 +78,5 @@ class CameraStream:
             return base64.b64encode(data).decode('utf-8')
         return None
 
-# Global camera instance
-camera = CameraStream()
+# Global camera instance (initialized with config values in main.py)
+camera: Optional[CameraStream] = None

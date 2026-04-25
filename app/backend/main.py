@@ -13,7 +13,8 @@ import asyncio
 
 from database import init_db, get_db
 from models import RobotReading, CleanedCell, CameraFrame, MapSnapshot
-from camera import camera
+from camera import CameraStream
+from config import settings
 import cv2
 
 app = FastAPI(title="Festival Robot API", version="1.0.0")
@@ -46,9 +47,12 @@ robot_state = {
 }
 
 # Map configuration
-GRID_SIZE = 20
-CELL_SIZE = 0.5
+GRID_SIZE = settings.GRID_SIZE
+CELL_SIZE = settings.CELL_SIZE
 map_grid = np.zeros((GRID_SIZE, GRID_SIZE), dtype=int)
+
+# Camera instance (initialized at startup)
+camera: Optional[CameraStream] = None
 
 # WebSocket connections for real-time streaming
 active_connections: List[WebSocket] = []
@@ -56,11 +60,20 @@ active_connections: List[WebSocket] = []
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and camera on startup"""
+    global camera
+
     init_db()
     print("✓ Database initialized")
 
+    camera = CameraStream(
+        camera_id=settings.CAMERA_ID,
+        width=settings.CAMERA_WIDTH,
+        height=settings.CAMERA_HEIGHT,
+        jpeg_quality=settings.CAMERA_JPEG_QUALITY
+    )
+
     if camera.connect():
-        print("✓ Camera connected")
+        print(f"✓ Camera connected (ID: {settings.CAMERA_ID}, {settings.CAMERA_WIDTH}x{settings.CAMERA_HEIGHT})")
         camera.start_streaming()
     else:
         print("✗ Camera not available (will use demo mode)")
