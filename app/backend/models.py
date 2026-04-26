@@ -10,6 +10,7 @@ class RobotReading(Base):
     id = Column(Integer, primary_key=True, index=True)
     battery = Column(Float, nullable=False)
     temperature = Column(Float, nullable=False)
+    humidity = Column(Float, nullable=True)
     position_x = Column(Float, nullable=False)
     position_y = Column(Float, nullable=False)
     is_active = Column(Boolean, default=True)

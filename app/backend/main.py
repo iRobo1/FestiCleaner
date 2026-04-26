@@ -16,6 +16,16 @@ from models import RobotReading, CleanedCell, CameraFrame, MapSnapshot
 from camera import CameraStream
 from config import settings
 import cv2
+import os
+
+# Optional Socket.IO bridge to the Arduino. We import lazily so the backend
+# still boots cleanly on a checkout where `python-socketio` isn't installed.
+try:
+    import socketio as sio_lib  # type: ignore[import-untyped]
+    _SIO_AVAILABLE = True
+except ImportError:
+    sio_lib = None  # type: ignore[assignment]
+    _SIO_AVAILABLE = False
 
 app = FastAPI(title="Festival Robot API", version="1.0.0")
 
@@ -35,6 +45,7 @@ class Position(BaseModel):
 class TelemetryReading(BaseModel):
     battery: float
     temperature: float
+    humidity: Optional[float] = None
     position: Position
     timestamp: Optional[datetime] = None
 
@@ -42,6 +53,7 @@ class TelemetryReading(BaseModel):
 robot_state = {
     "battery": 85.0,
     "temperature": 22.5,
+    "humidity": 55.0,
     "position": {"x": 0.0, "y": 0.0},
     "is_active": True,
 }
@@ -56,6 +68,33 @@ camera: Optional[CameraStream] = None
 
 # WebSocket connections for real-time streaming
 active_connections: List[WebSocket] = []
+
+# ── Arduino Socket.IO bridge ─────────────────────────────────────────────────
+# When ARDUINO_HOST is set we keep a long-lived Socket.IO client connected to
+# the device's WebUI brick (port 7000 by default). /api/robot/shutdown and
+# /api/robot/start emit a "power" event on that socket so the device can
+# react however it wants. If the connection fails or python-socketio isn't
+# installed, we just log and keep going — the dashboard's soft-shutdown
+# (in-process is_active flag) still works.
+ARDUINO_HOST = os.getenv("ARDUINO_HOST", "").strip()
+ARDUINO_WEBUI_PORT = int(os.getenv("ARDUINO_WEBUI_PORT", "7000"))
+arduino_sio = (
+    sio_lib.Client(reconnection=True, reconnection_delay=2, logger=False)
+    if _SIO_AVAILABLE
+    else None
+)
+
+
+def signal_arduino(event: str, payload) -> bool:
+    """Best-effort Socket.IO emit to the Arduino. Never raises."""
+    if not arduino_sio or not arduino_sio.connected:
+        return False
+    try:
+        arduino_sio.emit(event, payload)
+        return True
+    except Exception as e:
+        print(f"⚠ failed to signal Arduino ({event}): {e}")
+        return False
 
 @app.on_event("startup")
 async def startup_event():
@@ -78,10 +117,28 @@ async def startup_event():
     else:
         print("✗ Camera not available (will use demo mode)")
 
+    if not _SIO_AVAILABLE:
+        print("ℹ python-socketio not installed — Arduino bridge disabled "
+              "(pip install 'python-socketio[client]==5.11.0' to enable)")
+    elif ARDUINO_HOST:
+        url = f"http://{ARDUINO_HOST}:{ARDUINO_WEBUI_PORT}"
+        try:
+            arduino_sio.connect(url, wait_timeout=2)
+            print(f"✓ Arduino Socket.IO bridge connected → {url}")
+        except Exception as e:
+            print(f"✗ Arduino Socket.IO bridge unreachable ({url}): {e}")
+    else:
+        print("ℹ ARDUINO_HOST not set — running without device signal bridge")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean up resources"""
     camera.disconnect()
+    if arduino_sio and arduino_sio.connected:
+        try:
+            arduino_sio.disconnect()
+        except Exception:
+            pass
 
 # ============= Robot Telemetry Endpoints =============
 
@@ -98,11 +155,47 @@ def get_status():
     """Get current robot status"""
     return robot_state
 
+@app.post("/api/robot/shutdown")
+def shutdown_robot():
+    """Mark the robot as offline. Telemetry POSTs are rejected with 423 until
+    /api/robot/start is called. If ARDUINO_HOST is configured, also emits a
+    `power=False` Socket.IO event to the device — what the device does with
+    that signal is up to its own code."""
+    robot_state["is_active"] = False
+    robot_state["last_update"] = datetime.now().isoformat()
+    signaled = signal_arduino("power", False)
+    return {
+        "is_active": False,
+        "shutdown_at": robot_state["last_update"],
+        "device_signaled": signaled,
+    }
+
+
+@app.post("/api/robot/start")
+def start_robot():
+    """Re-arm the robot. Telemetry POSTs are accepted again. If ARDUINO_HOST
+    is configured, also emits `power=True` to the device."""
+    robot_state["is_active"] = True
+    robot_state["last_update"] = datetime.now().isoformat()
+    signaled = signal_arduino("power", True)
+    return {
+        "is_active": True,
+        "started_at": robot_state["last_update"],
+        "device_signaled": signaled,
+    }
+
+
 @app.post("/api/robot/telemetry")
 def post_telemetry(reading: TelemetryReading, db: Session = Depends(get_db)):
-    """Accept and store telemetry data from robot"""
+    """Accept and store telemetry data from robot.
+    Returns 423 Locked while the robot is in shutdown state."""
+    if not robot_state.get("is_active", True):
+        raise HTTPException(status_code=423, detail="Robot is powered off")
+
     robot_state["battery"] = reading.battery
     robot_state["temperature"] = reading.temperature
+    if reading.humidity is not None:
+        robot_state["humidity"] = reading.humidity
     robot_state["position"] = reading.position.dict()
     robot_state["last_update"] = datetime.now().isoformat()
 
@@ -110,6 +203,7 @@ def post_telemetry(reading: TelemetryReading, db: Session = Depends(get_db)):
     db_reading = RobotReading(
         battery=reading.battery,
         temperature=reading.temperature,
+        humidity=reading.humidity,
         position_x=reading.position.x,
         position_y=reading.position.y,
         timestamp=reading.timestamp or datetime.utcnow()

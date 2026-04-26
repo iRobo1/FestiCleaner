@@ -20,6 +20,7 @@ class FakeArduino:
         self.update_interval = update_interval
         self.battery = 95.0  # Start at 95%
         self.temperature = 22.0  # Celsius
+        self.humidity = 58.0  # %RH (typical Mediterranean evening)
         self.position_x = 0.4
         self.position_y = 0.4
         self.time_elapsed = 0
@@ -42,6 +43,11 @@ class FakeArduino:
         temp_drift = random.uniform(-0.5, 0.5)
         self.temperature += temp_drift
         self.temperature = max(15, min(35, self.temperature))
+
+        # Simulate humidity (loosely anti-correlated with temperature drift).
+        humidity_drift = random.uniform(-1.2, 1.2) - temp_drift * 0.6
+        self.humidity += humidity_drift
+        self.humidity = max(20, min(95, self.humidity))
 
         # Movement — depends on mode.
         if mode == "stationary":
@@ -86,6 +92,7 @@ class FakeArduino:
         return {
             "battery": round(self.battery, 2),
             "temperature": round(self.temperature, 2),
+            "humidity": round(self.humidity, 2),
             "position": {
                 "x": round(self.position_x, 2),
                 "y": round(self.position_y, 2)
