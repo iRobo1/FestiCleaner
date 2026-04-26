@@ -19,5 +19,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src", "vite.config.ts"],
-  "exclude": ["src/legacy"]
+  "exclude": ["src/legacy", "src/legacy-v2"]
 }
