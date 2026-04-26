@@ -31,9 +31,20 @@ class FakeArduino:
         self.sweep_row_step = 1.0  # m between rows
         self.sweep_min = 0.4
         self.sweep_max = 9.6
+        # Simulated execution-loop phase. Cycles 1→2→3→4→1 every PHASE_DURATION
+        # seconds so the dashboard's StateWheel has something to track.
+        self.phase = 1
+        self.phase_changed_at = time.time()
+        self.PHASE_DURATION = 6.0
 
     def get_telemetry(self, mode="normal"):
         """Generate realistic sensor data based on mode"""
+
+        # Advance the execution-loop phase if its duration has elapsed.
+        now = time.time()
+        if now - self.phase_changed_at >= self.PHASE_DURATION:
+            self.phase = self.phase % 4 + 1   # 1→2→3→4→1
+            self.phase_changed_at = now
 
         # Simulate battery drain (0.25% per reading for visible demo progress)
         self.battery -= random.uniform(0.2, 0.3)
@@ -93,6 +104,7 @@ class FakeArduino:
             "battery": round(self.battery, 2),
             "temperature": round(self.temperature, 2),
             "humidity": round(self.humidity, 2),
+            "phase": self.phase,
             "position": {
                 "x": round(self.position_x, 2),
                 "y": round(self.position_y, 2)

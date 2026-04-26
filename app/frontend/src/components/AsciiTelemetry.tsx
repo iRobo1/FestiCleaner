@@ -1,33 +1,14 @@
 import { useEffect, useState } from 'react'
-import { CELL_SIZE, GRID_SIZE, type Telemetry } from '../api'
+import { PHASE_KEYS, PHASE_LABELS, type Telemetry } from '../api'
 
 const ASCII_W = 28
 
-function batteryBar(pct: number): { filled: string; empty: string } {
+function meterBar(pct: number, char: string): { filled: string; empty: string } {
   const filled = Math.round((pct / 100) * ASCII_W)
   return {
-    filled: '█'.repeat(filled),
+    filled: char.repeat(filled),
     empty: '░'.repeat(ASCII_W - filled),
   }
-}
-
-function asciiMap(x: number, y: number): { rows: string[]; here: { row: number; col: number } } {
-  const cols = 24
-  const rows = 10
-  const worldW = GRID_SIZE * CELL_SIZE
-  const worldH = GRID_SIZE * CELL_SIZE
-  const col = Math.min(cols - 1, Math.max(0, Math.floor((x / worldW) * cols)))
-  const row = Math.min(rows - 1, Math.max(0, Math.floor((y / worldH) * rows)))
-  const out: string[] = []
-  for (let r = 0; r < rows; r++) {
-    let line = ''
-    for (let c = 0; c < cols; c++) {
-      if (r === row && c === col) line += '◯'
-      else line += '·'
-    }
-    out.push(line)
-  }
-  return { rows: out, here: { row, col } }
 }
 
 type Props = { telemetry: Telemetry | null }
@@ -42,11 +23,12 @@ export function AsciiTelemetry({ telemetry }: Props) {
 
   const battery = telemetry?.battery ?? 0
   const temp = telemetry?.temperature ?? 0
-  const x = telemetry?.position.x ?? 0
-  const y = telemetry?.position.y ?? 0
+  const humidity = telemetry?.humidity ?? 0
+  const phaseKey = telemetry?.phase ? PHASE_KEYS[telemetry.phase - 1] : null
+  const phaseLabel = phaseKey ? PHASE_LABELS[phaseKey].toUpperCase() : '—'
 
-  const map = asciiMap(x, y)
-  const bar = batteryBar(battery)
+  const batteryMeter = meterBar(battery, '█')
+  const humidityMeter = meterBar(humidity, '▓')
 
   return (
     <div className="ascii">
@@ -59,8 +41,16 @@ export function AsciiTelemetry({ telemetry }: Props) {
         <div className="ascii__row">
           <span className="ascii__row-label">Battery · {battery.toFixed(1)}%</span>
           <span className="ascii__bar">
-            <span className="filled">{bar.filled}</span>
-            <span className="empty">{bar.empty}</span>
+            <span className="filled">{batteryMeter.filled}</span>
+            <span className="empty">{batteryMeter.empty}</span>
+          </span>
+        </div>
+
+        <div className="ascii__row">
+          <span className="ascii__row-label">Humidity · {humidity.toFixed(1)}%</span>
+          <span className="ascii__bar ascii__bar--humid">
+            <span className="filled">{humidityMeter.filled}</span>
+            <span className="empty">{humidityMeter.empty}</span>
           </span>
         </div>
 
@@ -73,25 +63,10 @@ export function AsciiTelemetry({ telemetry }: Props) {
         </div>
 
         <div className="ascii__row">
-          <span className="ascii__row-label">
-            Position · {x.toFixed(2)} m, {y.toFixed(2)} m
-          </span>
-          <pre className="ascii__map">
-            {map.rows.map((line, idx) => (
-              <span key={idx}>
-                {idx === map.here.row ? (
-                  <>
-                    {line.slice(0, map.here.col)}
-                    <span className="here">◯</span>
-                    {line.slice(map.here.col + 1)}
-                  </>
-                ) : (
-                  line
-                )}
-                {'\n'}
-              </span>
-            ))}
-          </pre>
+          <span className="ascii__row-label">Phase</span>
+          <div className="ascii__temp">
+            <span className="ascii__temp-num">{phaseLabel}</span>
+          </div>
         </div>
 
         <div className="ascii__caption">

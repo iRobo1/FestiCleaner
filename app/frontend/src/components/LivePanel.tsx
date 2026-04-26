@@ -76,8 +76,7 @@ export function LivePanel({ telemetry, cameraAvailable, onCameraStatus }: Props)
 function Hud({ telemetry }: { telemetry: Telemetry | null }) {
   const battery = telemetry?.battery ?? 0
   const temp = telemetry?.temperature ?? 0
-  const x = telemetry?.position.x ?? 0
-  const y = telemetry?.position.y ?? 0
+  const humidity = telemetry?.humidity ?? 0
 
   return (
     <div className="hud">
@@ -90,12 +89,8 @@ function Hud({ telemetry }: { telemetry: Telemetry | null }) {
         <span className="hud__value">{temp.toFixed(1)}°C</span>
       </div>
       <div className="hud__cell hud__cell--bl">
-        <span className="hud__label">Pos · X</span>
-        <span className="hud__value">{x.toFixed(2)} m</span>
-      </div>
-      <div className="hud__cell hud__cell--br">
-        <span className="hud__label">Pos · Y</span>
-        <span className="hud__value">{y.toFixed(2)} m</span>
+        <span className="hud__label">Humidity</span>
+        <span className="hud__value">{humidity.toFixed(1)}%</span>
       </div>
     </div>
   )

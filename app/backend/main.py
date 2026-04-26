@@ -46,6 +46,7 @@ class TelemetryReading(BaseModel):
     battery: float
     temperature: float
     humidity: Optional[float] = None
+    phase: Optional[int] = None  # 1=SEARCH, 2=FETCH, 3=RETURN, 4=DROP
     position: Position
     timestamp: Optional[datetime] = None
 
@@ -54,6 +55,7 @@ robot_state = {
     "battery": 85.0,
     "temperature": 22.5,
     "humidity": 55.0,
+    "phase": 1,
     "position": {"x": 0.0, "y": 0.0},
     "is_active": True,
 }
@@ -196,6 +198,8 @@ def post_telemetry(reading: TelemetryReading, db: Session = Depends(get_db)):
     robot_state["temperature"] = reading.temperature
     if reading.humidity is not None:
         robot_state["humidity"] = reading.humidity
+    if reading.phase is not None and reading.phase in (1, 2, 3, 4):
+        robot_state["phase"] = reading.phase
     robot_state["position"] = reading.position.dict()
     robot_state["last_update"] = datetime.now().isoformat()
 

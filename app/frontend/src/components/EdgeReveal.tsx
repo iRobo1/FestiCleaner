@@ -4,10 +4,9 @@ import { type Stats } from '../api'
 type Props = {
   connected: boolean
   sessionStart: number
-  onClear: () => void
 }
 
-export function EdgeReveal({ connected, sessionStart, onClear }: Props) {
+export function EdgeReveal({ connected, sessionStart }: Props) {
   const [stats, setStats] = useState<Stats | null>(null)
   const [now, setNow] = useState(Date.now())
 
@@ -73,9 +72,6 @@ export function EdgeReveal({ connected, sessionStart, onClear }: Props) {
           <span>{stats?.total_camera_snapshots ?? 0} snapshots</span>
           <button className="edge__btn" onClick={captureSnapshot}>
             Capture
-          </button>
-          <button className="edge__btn edge__btn--danger" onClick={onClear}>
-            Clear floor
           </button>
         </div>
       </header>
